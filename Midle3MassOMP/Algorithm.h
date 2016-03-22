@@ -3,8 +3,6 @@
 #include <iostream>
 #include <omp.h>
 
-#define MAX_THREADS 4
-
 //для вывода
 struct data{
 	int size;
@@ -41,7 +39,7 @@ public:
 	~Algorithm(void){}
 	data algorithm0(T *A,T *B,T *C,T *M,int length){
 		start_time();
-		int index=0;
+		int index = 0;
 		for(int i = 0; i < length; i++){
 			for(int j = 0; j < length; j++){
 				if(A[i] == B[j]){

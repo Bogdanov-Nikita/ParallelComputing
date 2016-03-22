@@ -5,7 +5,7 @@
 #include <fstream>
 using namespace std;
 
-#define MAX_THREADS 4
+int NumberOfThreads = 4;
 #define BUFFER_SIZE 256
 
 unsigned int length = 1024;
@@ -19,25 +19,33 @@ struct data{
 };
 data algorithm0();
 data algorithm1();
+void test(int index,const char *TestName,int *A,int *B,int *C,int *M,int length,fstream &log_out,LONGLONG ***table,int number);
 
 int _tmain(int argc, _TCHAR* argv[]){
 	//без арументов не запускать.
-	if(argc != 3 ){return -1;}
+	if(argc != 5 ){return -1;}
 
     size_t   i;
     char      *fileName = (char *)malloc( BUFFER_SIZE );
     wcstombs_s(&i, fileName, (size_t)BUFFER_SIZE, 
-               argv[2], (size_t)BUFFER_SIZE );
+               argv[4], (size_t)BUFFER_SIZE );
 
     // Output
     printf("   Characters converted: %u\n", i);
     printf("    Multibyte character: %s\n\n",
      fileName );
 
+	int measurement = _wtoi(argv[3]);
+	if(measurement < 1){return -4;}
+
+	int NumberOfThreads = _wtoi(argv[2]);
+	if(NumberOfThreads < 2){return -3;} 
+
 	int templength = _wtoi(argv[1]); 
-	if( templength <=0 || templength > (1024*1024)){return -2;}
+	if( templength <= 0 || templength > (1024*1024)){return -2;}
 	length = templength;
 	//main programm
+
 
 	InitializeCriticalSection(&cr_s); //инициализация критической секции
 	A = new int[length];
@@ -45,93 +53,82 @@ int _tmain(int argc, _TCHAR* argv[]){
 	C = new int[length];
 	M = new int[length];
 	
-	//проверить оптимальное количество потоков
-	//int NumberOfThreads = 4;
-	// Устанавливаем желаемое количество потоков
-	//omp_set_num_threads(NumberOfThreads);
-	
 	fstream log_out = fstream(fileName,ios_base::out);
 	if(log_out.is_open()){
-		
-		data d;
-		log_out<<"start"<<endl;
-
-		///////////////////////////////////////////////////////empty test
-		for(unsigned int i = 0; i < length; i++){
-			A[i] = i*2+1;
-			B[i] = i;
-			C[i] = i*2;
-			M[i] = 0;
-		}
-
-		d = algorithm0();
-		log_out<<"algorithm0 emty set\t"<<"size:\t"<<d.size<<"\ttime:\t"<<d.time<<endl; 
-
-		d = algorithm1();
-		log_out<<"algorithm1 emty set\t"<<"size:\t"<<d.size<<"\ttime:\t"<<d.time<<endl;
-		//////////////////////////////////////////////////////random test
-		int temp1 = 1;
-		int temp2 = 2;
-		int temp3 = 3;
-		for(unsigned int i = 0; i < length; i++){
-			//генератор для чисел множества можно испльзовать для получения входных множеств
-			//int temp = любое число кроме 0
-			A[i] = (temp1*temp1) + ((temp1 <<  temp1) | (temp1 >> temp1));
-			B[i] = (temp2*temp2) + ((temp2 <<  temp2) | (temp2 >> temp2));
-			C[i] = (temp3*temp3) + ((temp3 <<  temp3) | (temp3 >> temp3));
-			M[i] = 0;
-		}
-		
-		d = algorithm0();
-		log_out<<"algorithm0 random\t"<<"size:\t"<<d.size<<"\ttime:\t"<<d.time<<endl; 
-
-		d = algorithm1();
-		log_out<<"algorithm1 random\t"<<"size:\t"<<d.size<<"\ttime:\t"<<d.time<<endl; 
-		///////////////////////////////////////////////////fibonacci test
-		B[0] = 1;B[1] = 2;
-		for(unsigned int i = 0; i < length; i++){
-			A[i] = length-i;
-			if(i>1){
-			B[i] = B[i-2]+B[i-1];
+		log_out<<"тест\tпоследовательно\tпареллельно\tкоэффицент"<<endl; 
+		cout<<"start"<<endl;
+		LONGLONG ***table = new LONGLONG**[3];
+		for(int j = 0; j < 2; j++){
+			table[j] = new LONGLONG*[5];
+			for(int k = 0; k < 5; k++){
+				table[j][k] = new LONGLONG[measurement];
 			}
-			C[i] = i;
-			M[i] = 0;
+		}
+		//[measurement];//[последов - 0,паралл-1,паралле-2][test N][number]
+		for(int index = 0; index < measurement; index++){
+			///////////////////////////////////////////////////////empty test
+			for(unsigned int i = 0; i < length; i++){
+				A[i] = i*2+1;
+				B[i] = i;
+				C[i] = i*2;
+				M[i] = 0;
+			}
+			test(1,"empty test",A,B,C,M,length,log_out,table,index);
+			//////////////////////////////////////////////////////random test
+			int temp1 = 1;
+			int temp2 = 2;
+			int temp3 = 3;
+			for(unsigned int i = 0; i < length; i++){
+				A[i] = (temp1*temp1) + ((temp1 <<  temp1) | (temp1 >> temp1));
+				B[i] = (temp2*temp2) + ((temp2 <<  temp2) | (temp2 >> temp2));
+				C[i] = (temp3*temp3) + ((temp3 <<  temp3) | (temp3 >> temp3));
+				M[i] = 0;
+			}
+			test(2,"random test",A,B,C,M,length,log_out,table,index);
+			///////////////////////////////////////////////////fibonacci test
+			B[0] = 1;B[1] = 2;
+			for(unsigned int i = 0; i < length; i++){
+				A[i] = length-i;
+				if(i>1){
+				B[i] = B[i-2]+B[i-1];
+				}
+				C[i] = i;
+				M[i] = 0;
+			}
+			test(3,"fibonacci test",A,B,C,M,length,log_out,table,index);
+			////////////////////////////////////////////////////2X 3X 5X test
+			for(unsigned int i = 0; i < length; i++){
+				A[i] = i*2;
+				B[i] = i*3;
+				C[i] = i*5;
+				M[i] = 0;
+			}
+			test(4,"2X 3X 5X test",A,B,C,M,length,log_out,table,index);
+			////////////////////////////////////////////////////////full test
+			for(unsigned int i = 0; i < length; i++){
+				A[i] = i;
+				B[i] = i;
+				C[i] = i;
+				M[i] = 0;
+			}
+			test(5,"full test",A,B,C,M,length,log_out,table,index);
+			/////////////////////////////////////////////////////////////////
 		}
 
-		d = algorithm0();
-		log_out<<"algorithm0 fibonacci\t"<<"size:\t"<<d.size<<"\ttime:\t"<<d.time<<endl; 
-
-		d = algorithm1();
-		log_out<<"algorithm1 fibonacci\t"<<"size:\t"<<d.size<<"\ttime:\t"<<d.time<<endl;
-		////////////////////////////////////////////////////2X 3X 5X test
-		for(unsigned int i = 0; i < length; i++){
-			A[i] = i*2;
-			B[i] = i*3;
-			C[i] = i*5;
-			M[i] = 0;
+		for(int test = 0; test < 5; test++){
+			for(int i = 0; i < measurement; i++){
+				log_out<< (test+1) << "\t" << 
+				table[0][test][i] << "\t" << 
+				table[1][test][i] << "\t" << endl;
+			}
+			log_out<<endl;
 		}
-
-		d = algorithm0();
-		log_out<<"algorithm0 2X 3X 5X\t"<<"size:\t"<<d.size<<"\ttime:\t"<<d.time<<endl; 
-
-		d = algorithm1();
-		log_out <<"algorithm1 2X 3X 5X\t"<<"size:\t"<<d.size<<"\ttime:\t"<<d.time<<endl;
-		////////////////////////////////////////////////////////full test
-		for(unsigned int i = 0; i < length; i++){
-			A[i] = i;
-			B[i] = i;
-			C[i] = i;
-			M[i] = 0;
+		for(int j = 0; j < 2; j++){
+			for(int k = 0; k < 5; k++){
+				delete[]table[j][k];
+			}
 		}
-
-		d = algorithm0();
-		log_out<<"algorithm0 full set\t"<<"size:\t"<<d.size<<"\ttime:\t"<<d.time<<endl; 
-		
-		d = algorithm1();//проблема!!!! с переполнением
-		log_out <<"algorithm1 full set\t"<<"size:\t"<<d.size<<"\ttime:\t"<<d.time<<endl;
-		/////////////////////////////////////////////////////////////////
-		log_out <<"end"<<endl;
-		
+		cout<<"end"<<endl;
 		log_out.close();
 	}else{
 		cout<<"error"<<endl;
@@ -145,8 +142,19 @@ int _tmain(int argc, _TCHAR* argv[]){
 	delete C;
 	delete M;
 	DeleteCriticalSection(&cr_s);//удаление критической секции.
-	//system("pause");
 	return 0;
+}
+void test(int index,const char *TestName,int *A,int *B,int *C,int *M,int length,fstream &log_out,LONGLONG ***table,int number){
+	LONGLONG successively,parallel;
+	data d;
+	d = algorithm0();
+	cout<<"successively "<<TestName<<"\t"<<"size:\t"<<d.size<<endl;
+	successively = d.time; 
+	d = algorithm1();
+	cout<<"parallel "<<TestName<<"\t"<<"size:\t"<<d.size<<endl; 
+	parallel = d.time;
+	table[0][index-1][number] = successively;
+	table[1][index-1][number] = parallel;
 }
 
 //переменные для работы с таймером.
@@ -189,12 +197,10 @@ data algorithm0(){
 }
 
 DWORD WINAPI function1(LPVOID lpParam){
-	int* pDataArray = (int*)lpParam;
+	int pDataArray = (unsigned int)((int)lpParam);
 	//выполнение программного алгоритма.
-	
-	unsigned int start = ((unsigned int)*pDataArray)*(length/MAX_THREADS);//беда с числами в последнем случае.
-	unsigned int end =  (((unsigned int)*pDataArray) + 1)*(length/MAX_THREADS);
-	//cout<<"start "<<start<<" end "<<end<<endl;
+	unsigned int start = (pDataArray)*(length/NumberOfThreads);
+	unsigned int end =   (pDataArray + 1)*(length/NumberOfThreads);
 	for(unsigned int i = start; i < end; i++){
 		for(unsigned int j = 0; j < length; j++){
 			if(A[i] == B[j]){
@@ -249,20 +255,14 @@ void ErrorHandler(LPTSTR lpszFunction) {
 data algorithm1(){
 	ThradArrayIndex = 0;
 	data d;
-	int *pDataArray[MAX_THREADS];
-	DWORD   dwThreadIdArray[MAX_THREADS];
-	HANDLE  hThreadArray[MAX_THREADS]; 
+	int *pDataArray = new int [NumberOfThreads];
+	DWORD *dwThreadIdArray = new DWORD [NumberOfThreads];
+	HANDLE *hThreadArray = new HANDLE[NumberOfThreads]; 
 
-	for( int i = 0; i < MAX_THREADS; i++ ){
-		pDataArray[i] = (int*) HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY,
-				sizeof(int));
-
-		if( pDataArray[i] == NULL ){
-			ExitProcess(2);
-		}
-		(*pDataArray[i]) =  i;
-
+	for( int i = 0; i < NumberOfThreads; i++ ){
+		pDataArray[i] =  i;
 		start_time();
+
 		hThreadArray[i] = CreateThread( 
 			NULL,                   // default security attributes
 			0,                      // use default stack size  
@@ -277,17 +277,13 @@ data algorithm1(){
 		}
 	}
 
-	WaitForMultipleObjects(MAX_THREADS, hThreadArray, TRUE, INFINITE);
+	WaitForMultipleObjects(NumberOfThreads, hThreadArray, TRUE, INFINITE);
 		
 	d.time = end_time();
-
-	for(int i=0; i<MAX_THREADS; i++){
-		CloseHandle(hThreadArray[i]);
-		if(pDataArray[i] != NULL){
-			HeapFree(GetProcessHeap(), 0, (LPVOID)pDataArray[i]);
-			pDataArray[i] = NULL;
-		}
-	}
 	d.size = ThradArrayIndex;
+
+	delete pDataArray;
+	delete dwThreadIdArray;
+	delete hThreadArray;
 	return d;
 }
